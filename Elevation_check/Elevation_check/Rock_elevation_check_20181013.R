@@ -12,48 +12,49 @@ library("tidyverse")
 library("MASS")
 library("lubridate")
 
-#dat<- read_csv("20180731_surv_el_trans.csv")
-dat<- read_csv("asbuilt_20180905.csv")
 
+setwd("~/Git/Data/Elevation_check/Elevation_check")
+dat<- read_csv("as_built_all_20181013.csv")
 
-dat$Date=mdy("09/05/2018") #need to add the sampling date
+dat$Date=mdy("10/13/2018") #need to add the sampling/delivery date
 
 
 dat2<-subset(dat, select =c("Date","Transect", "Elev", "Element", "Type"))
 
-unique(dat2$Type)
-
+unique(dat2$Element)
 
 
 #!= is "is not equal to"
 
-#just filtering out, one at a time to make sure I get this
-#right, the "other" names for GS. I'm assuming these are
-#all GS
-
-dat2.1<-filter(dat2,dat2$Type!=c("GS/BEG 7"))
-dat2.2<-filter(dat2.1,dat2.1$Type!=c("GS/END 7"))
-dat2.3<-filter(dat2.2,dat2.2$Type!=c("GS/8 BEG"))
-dat2.4<-filter(dat2.3,dat2.3$Type!=c("GS/END 8"))
-dat2.5<-filter(dat2.4,dat2.4$Type!=c("GS"))
-
-#now in 2.5 we are only working with ROCK TOPS
-#I did it this way incase we have to go back and easily
-#allow some of these random names back in
-
-#ok this is just renaming dat2.5 back to dat2
-dat2<-dat2.5
+# #just filtering out, one at a time to make sure I get this
+# #right, the "other" names for GS. I'm assuming these are
+# #all GS
+# 
+# dat2.1<-filter(dat2,dat2$Type!=c("GS/BEG 7"))
+# dat2.2<-filter(dat2.1,dat2.1$Type!=c("GS/END 7"))
+# dat2.3<-filter(dat2.2,dat2.2$Type!=c("GS/8 BEG"))
+# dat2.4<-filter(dat2.3,dat2.3$Type!=c("GS/END 8"))
+# dat2.5<-filter(dat2.4,dat2.4$Type!=c("GS"))
+# 
+# #now in 2.5 we are only working with ROCK TOPS
+# #I did it this way incase we have to go back and easily
+# #allow some of these random names back in
+# 
+# #ok this is just renaming dat2.5 back to dat2
+# dat2<-dat2.5
 
 #create new dataframe dat2 by mutating dat to create new elment id
 #name 11c for the most southern 3 transects of 11b.  These transects
 #are the new rock size transects. the notation is 7 or 8 or 9
-dat3<-mutate(dat2, Element_id_2 = ifelse(Transect > 99, "11c", Element))
+dat3<-mutate(dat2, Element_id_2 = ifelse(Transect > 999, "11c", Element))
 
 #need to turn this off now simply by setting transect to 99.  This is because with the second date of transect sampling there are now multiple transects with same number
 
 #ok this is creating the new Element_id_2 as a factor for use in plotting below
 dat3$Element_id_3<-factor(dat3$Element_id_2, 
-          levels =c ("2","3","4","5","6", "7", "8A"))
+          levels =c ("2","3","4","5","6",
+                     "8B","9A","9B","10A","10B","11A","11B",
+                     "12","13","14","15","16","17","18", "19", "20", "21","22"))
 
 ###Tables
 #just do some summarizing using pipes for fun and practice.  Remember %>% should be thought of as "then"
@@ -70,10 +71,11 @@ reefs <-  dat3 %>%
     count=n(),
     mean_elev=mean(Elev),
     max_elev=max(Elev),
+    min_elev=min(Elev),
     sd_elev=sd(Elev),
     CV_elev=(sd(Elev)/mean(Elev)*100))
 names(reefs) <- c("Reef", "Count_rocks", "Mean_elev",
-                  "Max_elev", "SD_elev", "CV_elev")
+                  "Max_elev","Min_elev","SD_elev", "CV_elev")
 
 #be careful here as if there are none over, then that reef element is  not returned so it can appear the number of elements is not correct
 over_spec <-  dat3 %>%
@@ -81,6 +83,14 @@ over_spec <-  dat3 %>%
   filter(Elev > -1.2) %>%
   summarize(
     count_over=n())
+
+#be careful here as if there are none over, then that reef element is  not returned so it can appear the number of elements is not correct
+down_spec <-  dat3 %>%
+  group_by(Element_id_3) %>%
+  filter(Elev < -1.95) %>%
+  summarize(
+    count_under=n())
+
 #the above returns X reefs that meet condition, Z not included because none are over
 
 num_rocks <-  dat3 %>%
@@ -138,12 +148,18 @@ windows(record=T)
 #in the code below the first line is defining the data we want to plot
 #Elev, then we give the graph labels, then we define the bin size in line 3 and then we define the x and y limits.  note one part of the graph per line
 
+
+#note sometimes you need to re-run dat2 and dat 3 BUT NOT RUN THE TABLES to get the dat3
+#to be correct for making graphs. I don't know what filter in the summaries
+#is doing to dat3 so it isn't carrying the values forward.
+
+
 p1<-ggplot(data=dat3) +
   aes(Elev) + 
   #super critical to just call Elev here and not dat$Elev or it goofs up facet_wrap
-  labs(x="Elev", y="Frequency", title="Elevation of rock top surface elements 5-11b") +
-  geom_histogram(breaks=seq(-2.5, 0.5, by=0.01)) +
-  xlim(c(-2.5,1.5)) +
+  labs(x="Elev", y="Frequency", title="Elevation of rock top surface elements 2-22") +
+  geom_histogram(breaks=seq(-4.5, 0, by=0.001)) +
+  #xlim(c(-2.5,0)) +
   ylim(c(0,15))
 
 p1
@@ -170,7 +186,7 @@ head(ggplot_build(p1)$data[[1]], 10)
 
 #ok adding Element_id which is a character
 p2<-p1+
-  facet_wrap(~Element_id_2, nrow=7) +
+  facet_wrap(~Element_id_2, nrow=6) +
   labs(title = "Elevation of rock top surface by reef element")
 
 p2
@@ -233,7 +249,31 @@ p6<-ggplot(data=dat3) +
         geom_hline(yintercept = -1.95, color = "black", 
                    size=1, linetype = 2)
 p6
-   
+  
+#put in order from north to south basically start with 2 and go to 18
+
+dat4<-dat3%>%
+  mutate(Element_id_3=fct_relevel(Element_id_3,"2","3","4","5","6",
+                                  "8B","9A","9B","10A","10B","11A","11B",
+                                  "12","13","14","15","16","17","18", "19",
+                                  "20", "21", "22"))
+unique(dat3$Element_id_3)
+
+
+p6b<-
+  ggplot(data=dat4) +
+  labs(title="Reef element North to South") +
+  geom_boxplot(
+    mapping = aes(
+      x=(Element_id_3),
+      y=Elev))+
+  geom_hline(yintercept = -1.2, color = "black", 
+             size=1, linetype = 2) +
+  geom_hline(yintercept = -1.95, color = "black", 
+             size=1, linetype = 2)
+p6b
+
+ 
 # # # add counts of observations DIDN"T WORK  
 # p7<-p6+
 #   geom_text(
@@ -306,6 +346,11 @@ xy[["y"]]
 ################################
 
 
+
+
+
+#######################
+################################
 
 
 
